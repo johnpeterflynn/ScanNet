@@ -44,12 +44,12 @@ class RGBDFrame():
 
 class SensorData:
 
-  def __init__(self, filename):
+  def __init__(self, filename, output_path, depth='', color='', pose=''):
     self.version = 4
-    self.load(filename)
+    self.load(filename, output_path, depth, color, pose)
 
 
-  def load(self, filename):
+  def load(self, filename, output_path, depth, color, pose):
     with open(filename, 'rb') as f:
       version = struct.unpack('I', f.read(4))[0]
       assert self.version == version
@@ -68,13 +68,30 @@ class SensorData:
       self.depth_shift =  struct.unpack('f', f.read(4))[0]
       num_frames =  struct.unpack('Q', f.read(8))[0]
       self.frames = []
-      for i in range(num_frames):
-        frame = RGBDFrame()
-        frame.load(f)
-        self.frames.append(frame)
+
+      # TODO: WARNING: This breaks frame_skip
+      FRAMES_PER_CHUNK = 250
+      for p in range(num_frames // FRAMES_PER_CHUNK + 1):
+        start = p * FRAMES_PER_CHUNK
+        for i in range(start, min(start + FRAMES_PER_CHUNK, num_frames)):
+          frame = RGBDFrame()
+          frame.load(f)
+          self.frames.append(frame)
+
+        if depth != '':
+            self.export_depth_images(os.path.join(output_path, depth), start_index=start)
+        if color != '':
+            self.export_color_images(os.path.join(output_path, color), start_index=start)
+        if pose != '':
+            self.export_poses(os.path.join(output_path, pose), start_index=start)
+        self.frames.clear()
 
 
-  def export_depth_images(self, output_path, image_size=None, frame_skip=1):
+
+
+
+
+  def export_depth_images(self, output_path, image_size=None, frame_skip=1, start_index=0):
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print('exporting', len(self.frames)//frame_skip, ' depth frames to', output_path)
@@ -83,10 +100,10 @@ class SensorData:
       depth = np.fromstring(depth_data, dtype=np.uint16).reshape(self.depth_height, self.depth_width)
       if image_size is not None:
         depth = cv2.resize(depth, (image_size[1], image_size[0]), interpolation=cv2.INTER_NEAREST)
-      imageio.imwrite(os.path.join(output_path, str(f) + '.png'), depth)
+      imageio.imwrite(os.path.join(output_path, str(f+start_index) + '.png'), depth)
 
 
-  def export_color_images(self, output_path, image_size=None, frame_skip=1):
+  def export_color_images(self, output_path, image_size=None, frame_skip=1, start_index=0):
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print('exporting', len(self.frames)//frame_skip, 'color frames to', output_path)
@@ -94,7 +111,7 @@ class SensorData:
       color = self.frames[f].decompress_color(self.color_compression_type)
       if image_size is not None:
         color = cv2.resize(color, (image_size[1], image_size[0]), interpolation=cv2.INTER_NEAREST)
-      imageio.imwrite(os.path.join(output_path, str(f) + '.jpg'), color)
+      imageio.imwrite(os.path.join(output_path, str(f+start_index) + '.jpg'), color)
 
 
   def save_mat_to_file(self, matrix, filename):
@@ -103,12 +120,12 @@ class SensorData:
         np.savetxt(f, line[np.newaxis], fmt='%f')
 
 
-  def export_poses(self, output_path, frame_skip=1):
+  def export_poses(self, output_path, frame_skip=1, start_index=0):
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print('exporting', len(self.frames)//frame_skip, 'camera poses to', output_path)
     for f in range(0, len(self.frames), frame_skip):
-      self.save_mat_to_file(self.frames[f].camera_to_world, os.path.join(output_path, str(f) + '.txt'))
+      self.save_mat_to_file(self.frames[f].camera_to_world, os.path.join(output_path, str(f+start_index) + '.txt'))
 
 
   def export_intrinsics(self, output_path):

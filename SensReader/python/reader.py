@@ -21,19 +21,23 @@ print(opt)
 def main():
   if not os.path.exists(opt.output_path):
     os.makedirs(opt.output_path)
+
+  depth, color, pose = '', '', ''
+
+  if opt.export_depth_images:
+    depth = 'depth'
+  if opt.export_color_images:
+    color = 'color'
+  if opt.export_poses:
+    pose = 'pose'
+
   # load the data
   sys.stdout.write('loading %s...' % opt.filename)
-  sd = SensorData(opt.filename)
+  sd = SensorData(opt.filename, opt.output_path, depth='depth', color='color', pose='pose')
   sys.stdout.write('loaded!\n')
-  if opt.export_depth_images:
-    sd.export_depth_images(os.path.join(opt.output_path, 'depth'))
-  if opt.export_color_images:
-    sd.export_color_images(os.path.join(opt.output_path, 'color'))
-  if opt.export_poses:
-    sd.export_poses(os.path.join(opt.output_path, 'pose'))
+
   if opt.export_intrinsics:
     sd.export_intrinsics(os.path.join(opt.output_path, 'intrinsic'))
-
 
 if __name__ == '__main__':
     main()
